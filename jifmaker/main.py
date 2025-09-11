@@ -1,15 +1,19 @@
 import os
 import sys
+import math 
+
 import subprocess
 import json
 import tempfile
+
+from PyQt5.QtCore import Qt, QSettings
+from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
                              QSpinBox, QComboBox, QCheckBox, QGroupBox,
                              QFileDialog, QTextEdit, QMessageBox, QSlider,
-                             QGridLayout, QTabWidget, QProgressBar)
-from PyQt5.QtCore import Qt, QSettings
-from PyQt5.QtGui import QPixmap
+                             QGridLayout, QTabWidget, QProgressBar,
+                             QSizePolicy, QFormLayout) 
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -22,7 +26,13 @@ class JIFMaker(QMainWindow):
         super().__init__()
         self.settings = QSettings("Jordan Pierce", "JIFMaker")
         self.setWindowTitle("JIFMaker - Video to GIF Converter")
-        self.setGeometry(100, 100, 1200, 1000)
+        
+        # Add window icon
+        icon_path = os.path.join(os.path.dirname(__file__), "icons", "peanut-butter.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+        
+        self.setGeometry(100, 100, 100, 100)
         
         # Central widget
         central_widget = QWidget()
@@ -37,42 +47,46 @@ class JIFMaker(QMainWindow):
         
         # Preview section
         preview_group = QGroupBox("Output Preview")
-        preview_layout = QVBoxLayout(preview_group)
-        
-        # Preview label
+        preview_layout = QFormLayout(preview_group)  # Changed to QFormLayout
         self.preview_label = QLabel()
-        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setAlignment(Qt.AlignCenter)  # Ensure centered alignment
         self.preview_label.setMinimumSize(400, 300)
+        self.preview_label.setMaximumSize(400, 300)  # Fix size to prevent resizing
+        self.preview_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Prevent expansion
         self.preview_label.setStyleSheet("border: 1px solid gray; background-color: black;")
         self.preview_label.setText("Output preview will appear here")
-        preview_layout.addWidget(self.preview_label)
-        
-        # Dimensions info
-        dimensions_info = QHBoxLayout()
-        dimensions_info.addWidget(QLabel("Output Dimensions:"))
-        self.dimensions_label = QLabel("Not set")
-        dimensions_info.addWidget(self.dimensions_label)
-        dimensions_info.addStretch()
-        preview_layout.addLayout(dimensions_info)
-        
-        # File size estimation
-        size_info = QHBoxLayout()
-        size_info.addWidget(QLabel("Estimated Size:"))
-        self.size_label = QLabel("Unknown")
-        size_info.addWidget(self.size_label)
-        size_info.addStretch()
-        preview_layout.addLayout(size_info)
+        preview_layout.addRow("", self.preview_label)  # Empty label for the preview
         
         left_panel.addWidget(preview_group)
         
+        # New group box for output info
+        info_group = QGroupBox("Output Info")
+        info_layout = QFormLayout(info_group)  # Changed to QFormLayout
+        self.dimensions_label = QLabel("Not set")
+        self.size_label = QLabel("Unknown")
+        info_layout.addRow("Output Dimensions:", self.dimensions_label)
+        info_layout.addRow("Estimated Size:", self.size_label)
+        
+        left_panel.addWidget(info_group)
+        
         # File info
-        info_group = QGroupBox("File Information")
-        info_layout = QVBoxLayout(info_group)
+        file_info_group = QGroupBox("File Information")
+        file_info_layout = QFormLayout(file_info_group)  # Changed to QFormLayout
         self.file_info = QTextEdit()
         self.file_info.setMaximumHeight(150)
         self.file_info.setReadOnly(True)
-        info_layout.addWidget(self.file_info)
-        left_panel.addWidget(info_group)
+        file_info_layout.addRow("", self.file_info)  # Removed label
+        
+        left_panel.addWidget(file_info_group)
+        
+        # Output log (moved from right panel)
+        log_group = QGroupBox("Output Log")
+        log_layout = QFormLayout(log_group)  # Changed to QFormLayout
+        self.output_log = QTextEdit()
+        self.output_log.setReadOnly(True)
+        log_layout.addRow("", self.output_log)  # Removed label
+        
+        left_panel.addWidget(log_group)
         
         main_layout.addLayout(left_panel)
         
@@ -95,11 +109,12 @@ class JIFMaker(QMainWindow):
         
         # Command preview
         command_group = QGroupBox("FFmpeg Command")
-        command_layout = QVBoxLayout(command_group)
+        command_layout = QFormLayout(command_group)  # Changed to QFormLayout
         self.command_preview = QTextEdit()
         self.command_preview.setMaximumHeight(100)
         self.command_preview.setReadOnly(True)
-        command_layout.addWidget(self.command_preview)
+        command_layout.addRow("", self.command_preview)  # Removed label
+        
         right_panel.addWidget(command_group)
         
         # Process button
@@ -112,13 +127,7 @@ class JIFMaker(QMainWindow):
         self.progress_bar.setVisible(False)
         right_panel.addWidget(self.progress_bar)
         
-        # Output log
-        log_group = QGroupBox("Output Log")
-        log_layout = QVBoxLayout(log_group)
-        self.output_log = QTextEdit()
-        self.output_log.setReadOnly(True)
-        log_layout.addWidget(self.output_log)
-        right_panel.addWidget(log_group)
+        # Removed log_group from right_panel
         
         main_layout.addLayout(right_panel)
         
@@ -141,58 +150,49 @@ class JIFMaker(QMainWindow):
         
         # Input file selection
         input_group = QGroupBox("Input File")
-        input_layout = QVBoxLayout(input_group)
-        
+        input_layout = QFormLayout(input_group)  # Changed to QFormLayout
         input_file_layout = QHBoxLayout()
         self.input_file_edit = QLineEdit()
         input_file_button = QPushButton("Browse...")
         input_file_button.clicked.connect(self.browse_input_file)
         input_file_layout.addWidget(self.input_file_edit)
         input_file_layout.addWidget(input_file_button)
-        input_layout.addLayout(input_file_layout)
+        input_layout.addRow("Input File:", input_file_layout)
         
         layout.addWidget(input_group)
         
         # Output file selection
         output_group = QGroupBox("Output File")
-        output_layout = QVBoxLayout(output_group)
-        
+        output_layout = QFormLayout(output_group)  # Changed to QFormLayout
         output_file_layout = QHBoxLayout()
         self.output_file_edit = QLineEdit()
         output_file_button = QPushButton("Browse...")
         output_file_button.clicked.connect(self.browse_output_file)
         output_file_layout.addWidget(self.output_file_edit)
         output_file_layout.addWidget(output_file_button)
-        output_layout.addLayout(output_file_layout)
+        output_layout.addRow("Output File:", output_file_layout)
         
         layout.addWidget(output_group)
         
         # Processing options
         options_group = QGroupBox("Basic Processing Options")
-        options_layout = QVBoxLayout(options_group)
-        
-        # Output dimensions
-        dimensions_layout = QHBoxLayout()
-        dimensions_layout.addWidget(QLabel("Output Width:"))
+        options_layout = QFormLayout(options_group)  # Changed to QFormLayout
         self.width_spin = QSpinBox()
         self.width_spin.setRange(10, 3840)
         self.width_spin.setValue(800)
         self.width_spin.valueChanged.connect(self.update_dimensions)
-        dimensions_layout.addWidget(self.width_spin)
+        options_layout.addRow("Output Width:", self.width_spin)
         
-        dimensions_layout.addWidget(QLabel("Height:"))
         self.height_spin = QSpinBox()
         self.height_spin.setRange(10, 2160)
         self.height_spin.setValue(-1)  # Will be calculated based on aspect ratio
         self.height_spin.setSpecialValueText("Auto")
         self.height_spin.valueChanged.connect(self.update_dimensions)
-        dimensions_layout.addWidget(self.height_spin)
+        options_layout.addRow("Height:", self.height_spin)
         
         self.maintain_aspect_check = QCheckBox("Maintain Aspect Ratio")
         self.maintain_aspect_check.setChecked(True)
-        dimensions_layout.addWidget(self.maintain_aspect_check)
-        
-        options_layout.addLayout(dimensions_layout)
+        options_layout.addRow("", self.maintain_aspect_check)  # Empty label for checkbox
         
         # Margin controls
         margin_group = QGroupBox("Margins (Cropping)")
@@ -226,7 +226,7 @@ class JIFMaker(QMainWindow):
         self.right_margin_spin.valueChanged.connect(self.update_preview)
         margin_layout.addWidget(self.right_margin_spin, 1, 3)
         
-        options_layout.addWidget(margin_group)
+        options_layout.addRow("Margins (Cropping):", margin_group)  # Sub-group
         
         # FPS selection
         fps_layout = QHBoxLayout()
@@ -236,7 +236,7 @@ class JIFMaker(QMainWindow):
         self.fps_spin.setValue(15)
         fps_layout.addWidget(self.fps_spin)
         fps_layout.addStretch()
-        options_layout.addLayout(fps_layout)
+        options_layout.addRow("FPS:", self.fps_spin)
         
         # Color reduction
         colors_layout = QHBoxLayout()
@@ -246,7 +246,7 @@ class JIFMaker(QMainWindow):
         self.colors_spin.setValue(256)
         colors_layout.addWidget(self.colors_spin)
         colors_layout.addStretch()
-        options_layout.addLayout(colors_layout)
+        options_layout.addRow("Max Colors:", self.colors_spin)
         
         # Dithering algorithm
         dither_layout = QHBoxLayout()
@@ -255,7 +255,7 @@ class JIFMaker(QMainWindow):
         self.dither_combo.addItems(["bayer", "heckbert", "floyd_steinberg", "sierra2", "sierra2_4a", "none"])
         dither_layout.addWidget(self.dither_combo)
         dither_layout.addStretch()
-        options_layout.addLayout(dither_layout)
+        options_layout.addRow("Dithering:", self.dither_combo)
         
         # Loop option
         loop_layout = QHBoxLayout()
@@ -263,7 +263,7 @@ class JIFMaker(QMainWindow):
         self.loop_check.setChecked(True)
         loop_layout.addWidget(self.loop_check)
         loop_layout.addStretch()
-        options_layout.addLayout(loop_layout)
+        options_layout.addRow("", self.loop_check)  # Empty label for checkbox
         
         # Trim options
         trim_group = QGroupBox("Trim Options")
@@ -281,7 +281,7 @@ class JIFMaker(QMainWindow):
         trim_controls.addWidget(self.end_time_edit)
         
         trim_layout.addLayout(trim_controls)
-        options_layout.addWidget(trim_group)
+        options_layout.addRow("Trim Options:", trim_group)  # Sub-group
         
         layout.addWidget(options_group)
         layout.addStretch()
@@ -291,20 +291,13 @@ class JIFMaker(QMainWindow):
         
         # Frame optimization
         frame_group = QGroupBox("Frame Optimization")
-        frame_layout = QVBoxLayout(frame_group)
-        
-        # Frame skipping
-        skip_layout = QHBoxLayout()
-        skip_layout.addWidget(QLabel("Frame Skip:"))
+        frame_layout = QFormLayout(frame_group)  # Changed to QFormLayout
         self.frame_skip_spin = QSpinBox()
         self.frame_skip_spin.setRange(1, 10)
         self.frame_skip_spin.setValue(1)
         self.frame_skip_spin.setToolTip("Process only every Nth frame (1 = all frames)")
-        skip_layout.addWidget(self.frame_skip_spin)
-        skip_layout.addStretch()
-        frame_layout.addLayout(skip_layout)
+        frame_layout.addRow("Frame Skip:", self.frame_skip_spin)
         
-        # Frame difference threshold
         diff_layout = QHBoxLayout()
         diff_layout.addWidget(QLabel("Min Frame Difference:"))
         self.frame_diff_slider = QSlider(Qt.Horizontal)
@@ -315,23 +308,17 @@ class JIFMaker(QMainWindow):
         diff_layout.addWidget(self.frame_diff_label)
         self.frame_diff_slider.valueChanged.connect(
             lambda: self.frame_diff_label.setText(f"{self.frame_diff_slider.value()}%"))
-        frame_layout.addLayout(diff_layout)
+        frame_layout.addRow("Min Frame Difference:", diff_layout)  # Horizontal layout
         
         layout.addWidget(frame_group)
         
         # Advanced compression
         advanced_group = QGroupBox("Advanced Compression")
-        advanced_layout = QVBoxLayout(advanced_group)
-        
-        # Compression level
-        comp_layout = QHBoxLayout()
-        comp_layout.addWidget(QLabel("Compression Level:"))
+        advanced_layout = QFormLayout(advanced_group)  # Changed to QFormLayout
         self.compression_combo = QComboBox()
         self.compression_combo.addItems(["Low", "Medium", "High", "Very High"])
         self.compression_combo.setCurrentIndex(1)
-        comp_layout.addWidget(self.compression_combo)
-        comp_layout.addStretch()
-        advanced_layout.addLayout(comp_layout)
+        advanced_layout.addRow("Compression Level:", self.compression_combo)
         
         # Optimization options
         opt_layout = QHBoxLayout()
@@ -343,26 +330,22 @@ class JIFMaker(QMainWindow):
         self.no_extensions_check.setChecked(False)
         self.no_extensions_check.setToolTip("Disable GIF extensions (can reduce size but limit functionality)")
         opt_layout.addWidget(self.no_extensions_check)
-        advanced_layout.addLayout(opt_layout)
+        advanced_layout.addRow("", opt_layout)  # Horizontal layout for checkboxes
         
         layout.addWidget(advanced_group)
         
         # Post-processing
         post_group = QGroupBox("Post-Processing")
-        post_layout = QVBoxLayout(post_group)
-        
-        # Gifsicle optimization
-        gifsicle_layout = QHBoxLayout()
+        post_layout = QFormLayout(post_group)  # Changed to QFormLayout
         self.gifsicle_check = QCheckBox("Use Gifsicle Optimization")
         self.gifsicle_check.setChecked(False)
         self.gifsicle_check.setToolTip("Use gifsicle for additional optimization (must be installed)")
-        gifsicle_layout.addWidget(self.gifsicle_check)
+        post_layout.addRow("Use Gifsicle Optimization:", self.gifsicle_check)
         
         self.gifsicle_level_combo = QComboBox()
         self.gifsicle_level_combo.addItems(["O1 (Fast)", "O2", "O3 (Best)"])
         self.gifsicle_level_combo.setCurrentIndex(2)
-        gifsicle_layout.addWidget(self.gifsicle_level_combo)
-        post_layout.addLayout(gifsicle_layout)
+        post_layout.addRow("Level:", self.gifsicle_level_combo)
         
         layout.addWidget(post_group)
         layout.addStretch()
@@ -542,10 +525,11 @@ class JIFMaker(QMainWindow):
         # Calculate estimated frames
         total_frames = (duration * self.original_fps) / frame_skip
         
-        # Calculate estimated size (very rough estimation)
-        # Base formula: pixels * colors * frames * compression factor
+        # Calculate estimated size (improved rough estimation for palette-based formats)
+        # Use bits per pixel based on color palette: log2(colors)
         pixels = width * height
-        size_estimate = (pixels * colors * total_frames) / (8 * 1024)  # Convert to KB
+        bits_per_pixel = math.log2(colors) if colors > 1 else 1
+        size_estimate = (pixels * total_frames * bits_per_pixel) / (8 * 1024)  # Convert to KB
         
         # Apply compression factors
         compression_map = {"Low": 1.0, "Medium": 0.7, "High": 0.5, "Very High": 0.3}
@@ -555,6 +539,7 @@ class JIFMaker(QMainWindow):
         # Apply frame difference factor
         diff_factor = 1.0 - (self.frame_diff_slider.value() / 300.0)  # Up to 33% reduction
         size_estimate *= diff_factor
+        size_estimate /= 10  # Adjusted factor for better realism
         
         # Format the size
         if size_estimate < 1024:
@@ -633,10 +618,12 @@ class JIFMaker(QMainWindow):
                 Qt.SmoothTransformation
             )
             
-            # Scale the output preview to fit the preview label
+            # Scale the output preview to fit the fixed preview label size (400x300)
+            preview_width = 400
+            preview_height = 300
             output_scaled = scaled_pixmap.scaled(
-                self.preview_label.width(),
-                self.preview_label.height(),
+                preview_width,
+                preview_height,
                 Qt.KeepAspectRatio,
                 Qt.SmoothTransformation
             )
@@ -851,6 +838,9 @@ class JIFMaker(QMainWindow):
             QMessageBox.warning(self, "Error", "Input file does not exist")
             return
         
+        # Set cursor to busy
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        
         cmd_parts = self.generate_ffmpeg_command()
         
         # For GIF processing, we need to handle the two commands separately
@@ -931,6 +921,10 @@ class JIFMaker(QMainWindow):
                 if os.path.exists(palette_path):
                     os.remove(palette_path)
                 
+                # Restore cursor and show success message
+                QApplication.restoreOverrideCursor()
+                QMessageBox.information(self, "Success", "Processing completed successfully!")
+                
             except subprocess.CalledProcessError as e:
                 self.progress_bar.setVisible(False)
                 self.output_log.append(f"Error processing file: {e}")
@@ -940,9 +934,18 @@ class JIFMaker(QMainWindow):
                 if e.stderr:
                     self.output_log.append("FFmpeg errors:")
                     self.output_log.append(e.stderr)
+                
+                # Restore cursor and show error message
+                QApplication.restoreOverrideCursor()
+                QMessageBox.critical(self, "Error", f"Processing failed: {str(e)}")
+                
             except Exception as e:
                 self.progress_bar.setVisible(False)
                 self.output_log.append(f"Unexpected error: {e}")
+                
+                # Restore cursor and show error message
+                QApplication.restoreOverrideCursor()
+                QMessageBox.critical(self, "Error", f"Unexpected error: {str(e)}")
         
         # For non-GIF processing
         else:
@@ -967,6 +970,10 @@ class JIFMaker(QMainWindow):
                     self.output_log.append("FFmpeg errors/warnings:")
                     self.output_log.append(result.stderr)
                     
+                # Restore cursor and show success message
+                QApplication.restoreOverrideCursor()
+                QMessageBox.information(self, "Success", "Processing completed successfully!")
+                    
             except subprocess.CalledProcessError as e:
                 self.progress_bar.setVisible(False)
                 self.output_log.append(f"Error processing file: {e}")
@@ -975,10 +982,21 @@ class JIFMaker(QMainWindow):
                 if e.stderr:
                     self.output_log.append("FFmpeg errors:")
                     self.output_log.append(e.stderr)
+                
+                # Restore cursor and show error message
+                QApplication.restoreOverrideCursor()
+                QMessageBox.critical(self, "Error", f"Processing failed: {str(e)}")
+                
             except FileNotFoundError:
                 self.progress_bar.setVisible(False)
                 self.output_log.append("Error: FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.")
-
+                
+                # Restore cursor and show error message
+                QApplication.restoreOverrideCursor()
+                QMessageBox.critical(self, 
+                                     "Error", 
+                                     "FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.")
+    
     def closeEvent(self, event):
         """Clean up temporary files when closing the application"""
         import shutil
@@ -990,10 +1008,10 @@ class JIFMaker(QMainWindow):
 def main():
     """Main entry point for the application"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='JIFMaker - Convert videos to GIFs')
     parser.add_argument('--version', action='version', version='%(prog)s 0.1.0')
-    
+
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
