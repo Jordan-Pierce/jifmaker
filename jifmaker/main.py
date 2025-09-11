@@ -34,6 +34,12 @@ class JIFMaker(QMainWindow):
         
         self.setGeometry(100, 100, 100, 100)
         
+        # Disable maximize button
+        self.setWindowFlags(Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+        
+        # Enable drag and drop for the main window
+        self.setAcceptDrops(True)
+        
         # Central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -122,10 +128,7 @@ class JIFMaker(QMainWindow):
         self.process_button.clicked.connect(self.process_file)
         right_panel.addWidget(self.process_button)
         
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        right_panel.addWidget(self.progress_bar)
+        # Removed progress bar entirely
         
         # Removed log_group from right_panel
         
@@ -379,6 +382,9 @@ class JIFMaker(QMainWindow):
         for signal in signals:
             signal.connect(self.update_command_preview)
             signal.connect(self.estimate_file_size)
+        
+        # Connect input file edit to update output filename
+        self.input_file_edit.textChanged.connect(self.update_output_filename)
     
     def browse_input_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -873,8 +879,7 @@ class JIFMaker(QMainWindow):
             try:
                 # Run palette generation
                 self.output_log.append(f"Running palette generation: {' '.join(palette_cmd)}")
-                self.progress_bar.setVisible(True)
-                self.progress_bar.setRange(0, 0)  # Indeterminate progress
+                # Removed progress bar visibility and range setting
                 QApplication.processEvents()
                 
                 result1 = subprocess.run(
@@ -913,7 +918,7 @@ class JIFMaker(QMainWindow):
                     
                     self.output_log.append("Gifsicle optimization completed successfully!")
                 
-                self.progress_bar.setVisible(False)
+                # Removed progress bar visibility
                 self.output_log.append("Processing completed successfully!")
                 self.output_log.append("FFmpeg output:")
                 
@@ -926,7 +931,7 @@ class JIFMaker(QMainWindow):
                 QMessageBox.information(self, "Success", "Processing completed successfully!")
                 
             except subprocess.CalledProcessError as e:
-                self.progress_bar.setVisible(False)
+                # Removed progress bar visibility
                 self.output_log.append(f"Error processing file: {e}")
                 if e.stdout:
                     self.output_log.append("FFmpeg output:")
@@ -940,7 +945,7 @@ class JIFMaker(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Processing failed: {str(e)}")
                 
             except Exception as e:
-                self.progress_bar.setVisible(False)
+                # Removed progress bar visibility
                 self.output_log.append(f"Unexpected error: {e}")
                 
                 # Restore cursor and show error message
@@ -951,8 +956,7 @@ class JIFMaker(QMainWindow):
         else:
             try:
                 self.output_log.append(f"Running command: {' '.join(cmd_parts)}")
-                self.progress_bar.setVisible(True)
-                self.progress_bar.setRange(0, 0)  # Indeterminate progress
+                # Removed progress bar visibility and range setting
                 QApplication.processEvents()
                 
                 result = subprocess.run(
@@ -962,7 +966,7 @@ class JIFMaker(QMainWindow):
                     check=True
                 )
                 
-                self.progress_bar.setVisible(False)
+                # Removed progress bar visibility
                 self.output_log.append("Processing completed successfully!")
                 self.output_log.append("FFmpeg output:")
                 self.output_log.append(result.stdout)
@@ -975,7 +979,7 @@ class JIFMaker(QMainWindow):
                 QMessageBox.information(self, "Success", "Processing completed successfully!")
                     
             except subprocess.CalledProcessError as e:
-                self.progress_bar.setVisible(False)
+                # Removed progress bar visibility
                 self.output_log.append(f"Error processing file: {e}")
                 self.output_log.append("FFmpeg output:")
                 self.output_log.append(e.stdout)
@@ -988,7 +992,7 @@ class JIFMaker(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Processing failed: {str(e)}")
                 
             except FileNotFoundError:
-                self.progress_bar.setVisible(False)
+                # Removed progress bar visibility
                 self.output_log.append("Error: FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.")
                 
                 # Restore cursor and show error message
@@ -1003,8 +1007,35 @@ class JIFMaker(QMainWindow):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
         event.accept()
-
-
+    
+    def dragEnterEvent(self, event):
+        """Handle drag enter event for file drops"""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+    
+    def dropEvent(self, event):
+        """Handle drop event for file drops"""
+        urls = event.mimeData().urls()
+        if urls:
+            file_path = urls[0].toLocalFile()
+            if file_path:
+                self.input_file_edit.setText(file_path)
+                self.analyze_input_file(file_path)
+                
+                # Auto-generate output filename
+                if not self.output_file_edit.text():
+                    base, ext = os.path.splitext(file_path)
+                    output_path = f"{base}_processed.gif"
+                    self.output_file_edit.setText(output_path)
+    
+    def update_output_filename(self):
+        """Auto-generate output filename when input changes and output is empty"""
+        input_file = self.input_file_edit.text()
+        if input_file and not self.output_file_edit.text():
+            base, ext = os.path.splitext(input_file)
+            output_path = f"{base}_processed.gif"
+            self.output_file_edit.setText(output_path)
+    
 def main():
     """Main entry point for the application"""
     import argparse
