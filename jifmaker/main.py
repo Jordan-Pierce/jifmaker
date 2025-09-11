@@ -20,8 +20,8 @@ from PyQt5.QtGui import QPixmap
 class JIFMaker(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.settings = QSettings("Jordan Pierce", "JifMaker")
-        self.setWindowTitle("JifMaker - Video to GIF Converter")
+        self.settings = QSettings("Jordan Pierce", "JIFMaker")
+        self.setWindowTitle("JIFMaker - Video to GIF Converter")
         self.setGeometry(100, 100, 1200, 1000)
         
         # Central widget
