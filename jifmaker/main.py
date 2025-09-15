@@ -5,6 +5,7 @@ import math
 import subprocess
 import json
 import tempfile
+import shutil  # Added for checking if ffprobe is available
 
 from PyQt5.QtCore import Qt, QSettings
 from PyQt5.QtGui import QPixmap, QIcon
@@ -411,6 +412,12 @@ class JIFMaker(QMainWindow):
     
     def analyze_input_file(self, file_path):
         """Get information about the input file"""
+        # Check if ffprobe is available before proceeding
+        if not shutil.which("ffprobe"):
+            self.file_info.setPlainText("Error: ffprobe not found. Please install FFmpeg and ensure it's in your PATH.\n\nDownload from: https://ffmpeg.org/download.html")
+            self.preview_label.setText("Could not load preview")
+            return
+        
         try:
             # Use ffprobe to get file information
             cmd = [
@@ -485,6 +492,10 @@ class JIFMaker(QMainWindow):
             
             self.file_info.setPlainText(file_info_text)
             
+        except FileNotFoundError:
+            # Specific handling for when ffprobe isn't found (even if the pre-check passes, this is a fallback)
+            self.file_info.setPlainText("Error: ffprobe not found. Please install FFmpeg and ensure it's in your PATH.\n\nDownload from: https://ffmpeg.org/download.html")
+            self.preview_label.setText("Could not load preview")
         except Exception as e:
             self.file_info.setPlainText(f"Error analyzing file: {str(e)}")
             self.preview_label.setText("Could not load preview")
@@ -1029,9 +1040,9 @@ class JIFMaker(QMainWindow):
                     self.output_file_edit.setText(output_path)
     
     def update_output_filename(self):
-        """Auto-generate output filename when input changes and output is empty"""
+        """Auto-generate output filename whenever input changes"""
         input_file = self.input_file_edit.text()
-        if input_file and not self.output_file_edit.text():
+        if input_file:
             base, ext = os.path.splitext(input_file)
             output_path = f"{base}_processed.gif"
             self.output_file_edit.setText(output_path)
