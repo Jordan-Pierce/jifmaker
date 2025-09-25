@@ -566,13 +566,24 @@ class JIFMaker(QMainWindow):
     
     def time_to_seconds(self, time_str):
         """Convert HH:MM:SS format to seconds"""
+        if not time_str or time_str.strip() == '':
+            return 0
         parts = time_str.split(':')
         if len(parts) == 3:
-            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            try:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            except ValueError:
+                return 0
         elif len(parts) == 2:
-            return int(parts[0]) * 60 + int(parts[1])
+            try:
+                return int(parts[0]) * 60 + int(parts[1])
+            except ValueError:
+                return 0
         else:
-            return int(parts[0])
+            try:
+                return int(parts[0])
+            except ValueError:
+                return 0
     
     def extract_frame(self, file_path, frame_num):
         """Extract a specific frame from the video for preview"""
@@ -731,6 +742,9 @@ class JIFMaker(QMainWindow):
         if height <= 0:
             height = -1  # Let FFmpeg calculate height to preserve aspect ratio
         
+        # Define palette path for GIF processing
+        palette_path = os.path.join(self.temp_dir, "palette.png")
+        
         # Build the base command
         cmd = ["ffmpeg", "-y"]
         
@@ -747,62 +761,45 @@ class JIFMaker(QMainWindow):
         
         # For GIF output, use the two-pass method with palette generation
         if output_file.lower().endswith('.gif'):
-            # Use two-pass method: generate palette first, then create GIF
-            palette_path = os.path.join(self.temp_dir, "palette.png")
+            # Calculate duration if trimming is applied
+            duration = None
+            if start_time and start_time != "00:00:00" and end_time:
+                start_sec = self.time_to_seconds(start_time)
+                end_sec = self.time_to_seconds(end_time)
+                duration = end_sec - start_sec
             
             # First pass: generate palette
-            palette_cmd = [
-                "ffmpeg", "-y", "-i", input_file
-            ]
-            
-            # Add start/end time to palette generation if specified
+            palette_cmd = ["ffmpeg", "-y"]
             if start_time and start_time != "00:00:00":
                 palette_cmd.extend(["-ss", start_time])
-            if end_time:
-                palette_cmd.extend(["-to", end_time])
-                
-            # Add crop filter if any margins are set
+            palette_cmd.extend(["-i", input_file])
+            if duration is not None:
+                palette_cmd.extend(["-t", str(duration)])
+            
             filters = []
             if any([top, bottom, left, right]):
                 filters.append(f"crop={crop_width}:{crop_height}:{left}:{top}")
-            
-            # For palette generation, we don't scale to output size
-            # We just apply crop (if any) and then generate the palette
             filters.append(f"palettegen=max_colors={colors}:stats_mode=diff")
             
-            palette_cmd.extend([
-                "-vf", ",".join(filters),
-                "-frames:v", "1",
-                palette_path
-            ])
+            palette_cmd.extend(["-vf", ",".join(filters), palette_path])
             
-            # Second pass: create GIF using palette
-            gif_cmd = [
-                "ffmpeg", "-y", "-i", input_file
-            ]
-            
-            # Add start/end time to GIF creation if specified
+            # Second pass: create GIF
+            gif_cmd = ["ffmpeg", "-y"]
             if start_time and start_time != "00:00:00":
                 gif_cmd.extend(["-ss", start_time])
-            if end_time:
-                gif_cmd.extend(["-to", end_time])
+            gif_cmd.extend(["-i", input_file])
+            if duration is not None:
+                gif_cmd.extend(["-t", str(duration)])
+            gif_cmd.extend(["-i", palette_path])
             
-            # Add crop filter if any margins are set
             filters = []
             if any([top, bottom, left, right]):
                 filters.append(f"crop={crop_width}:{crop_height}:{left}:{top}")
-            
-            # Add frame skip if needed
             if frame_skip > 1:
                 filters.append(f"select='not(mod(n\\,{frame_skip}))'")
-            
             filters.append(f"fps={fps},scale={width}:{height}:flags=lanczos")
             
-            # FIXED: Removed the unsupported lossy parameter
-            gif_cmd.extend([
-                "-i", palette_path,
-                "-filter_complex", f"{','.join(filters)}[x];[x][1:v]paletteuse=dither={dither}:diff_mode=rectangle"
-            ])
+            gif_cmd.extend(["-filter_complex", f"{','.join(filters)}[x];[x][1:v]paletteuse=dither={dither}:diff_mode=rectangle"])
             
             # Add compression options
             if optimize_transparency:
