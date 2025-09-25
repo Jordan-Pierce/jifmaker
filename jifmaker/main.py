@@ -761,84 +761,77 @@ class JIFMaker(QMainWindow):
         
         # For GIF output, use the two-pass method with palette generation
         if output_file.lower().endswith('.gif'):
-            # Calculate duration if trimming is applied
+            # Calculate duration if any trimming is applied
             duration = None
-            if start_time and start_time != "00:00:00" and end_time:
+            start_sec = 0
+            end_sec = self.original_duration
+            
+            if start_time and start_time != "00:00:00":
                 start_sec = self.time_to_seconds(start_time)
+            if end_time:
                 end_sec = self.time_to_seconds(end_time)
+            
+            if start_sec > 0 or end_sec < self.original_duration:
                 duration = end_sec - start_sec
-            
-            # First pass: generate palette
-            palette_cmd = ["ffmpeg", "-y"]
-            if start_time and start_time != "00:00:00":
-                palette_cmd.extend(["-ss", start_time])
-            palette_cmd.extend(["-i", input_file])
-            if duration is not None:
-                palette_cmd.extend(["-t", str(duration)])
-            
-            filters = []
-            if any([top, bottom, left, right]):
-                filters.append(f"crop={crop_width}:{crop_height}:{left}:{top}")
-            filters.append(f"palettegen=max_colors={colors}:stats_mode=diff")
-            
-            palette_cmd.extend(["-vf", ",".join(filters), palette_path])
-            
-            # Second pass: create GIF
-            gif_cmd = ["ffmpeg", "-y"]
-            if start_time and start_time != "00:00:00":
-                gif_cmd.extend(["-ss", start_time])
-            gif_cmd.extend(["-i", input_file])
-            if duration is not None:
-                gif_cmd.extend(["-t", str(duration)])
-            gif_cmd.extend(["-i", palette_path])
-            
-            filters = []
-            if any([top, bottom, left, right]):
-                filters.append(f"crop={crop_width}:{crop_height}:{left}:{top}")
-            if frame_skip > 1:
-                filters.append(f"select='not(mod(n\\,{frame_skip}))'")
-            filters.append(f"fps={fps},scale={width}:{height}:flags=lanczos")
-            
-            gif_cmd.extend(["-filter_complex", f"{','.join(filters)}[x];[x][1:v]paletteuse=dither={dither}:diff_mode=rectangle"])
-            
-            # Add compression options
-            if optimize_transparency:
-                gif_cmd.extend(["-gifflags", "+transdiff"])
-            
-            if no_extensions:
-                gif_cmd.extend(["-gifflags", "-offsetting"])
-            
-            if loop:
-                gif_cmd.extend(["-loop", "0"])
-            else:
-                gif_cmd.extend(["-loop", "-1"])
-            
-            gif_cmd.append(output_file)
-            
-            # Add gifsicle optimization if requested
-            if use_gifsicle:
-                gifsicle_level = self.gifsicle_level_combo.currentText()
-                level_map = {"O1 (Fast)": "-O1", "O2": "-O2", "O3 (Best)": "-O3"}
-                gif_cmd.extend(["&&", "gifsicle", level_map[gifsicle_level], output_file, "-o", output_file])
-            
-            # Return both commands (we'll handle execution differently)
-            return palette_cmd + ["&&"] + gif_cmd
+                if duration <= 0:
+                    duration = None  # Invalid trim, process full video
         
-        # For non-GIF outputs (like WebP)
+        # First pass: generate palette
+        palette_cmd = ["ffmpeg", "-y"]
+        if start_sec > 0:
+            palette_cmd.extend(["-ss", start_time])
+        palette_cmd.extend(["-i", input_file])
+        if duration is not None:
+            palette_cmd.extend(["-t", str(duration)])
+        
+        filters = []
+        if any([top, bottom, left, right]):
+            filters.append(f"crop={crop_width}:{crop_height}:{left}:{top}")
+        filters.append(f"palettegen=max_colors={colors}:stats_mode=diff")
+        
+        palette_cmd.extend(["-vf", ",".join(filters), palette_path])
+        
+        # Second pass: create GIF
+        gif_cmd = ["ffmpeg", "-y"]
+        if start_sec > 0:
+            gif_cmd.extend(["-ss", start_time])
+        gif_cmd.extend(["-i", input_file])
+        if duration is not None:
+            gif_cmd.extend(["-t", str(duration)])
+        gif_cmd.extend(["-i", palette_path])
+        
+        filters = []
+        if any([top, bottom, left, right]):
+            filters.append(f"crop={crop_width}:{crop_height}:{left}:{top}")
+        if frame_skip > 1:
+            filters.append(f"select='not(mod(n\\,{frame_skip}))'")
+        filters.append(f"fps={fps},scale={width}:{height}:flags=lanczos")
+        
+        gif_cmd.extend(["-filter_complex", 
+                        f"{','.join(filters)}[x];[x][1:v]paletteuse=dither={dither}:diff_mode=rectangle"])
+        
+        # Add compression options
+        if optimize_transparency:
+            gif_cmd.extend(["-gifflags", "+transdiff"])
+        
+        if no_extensions:
+            gif_cmd.extend(["-gifflags", "-offsetting"])
+        
+        if loop:
+            gif_cmd.extend(["-loop", "0"])
         else:
-            # Add crop filter if any margins are set
-            filters = []
-            if any([top, bottom, left, right]):
-                filters.append(f"crop={crop_width}:{crop_height}:{left}:{top}")
-            
-            filters.append(f"fps={fps},scale={width}:{height}:flags=lanczos")
-            
-            cmd.extend(["-vf", ",".join(filters)])
-            if loop:
-                cmd.extend(["-loop", "0"])
-            cmd.append(output_file)
-            
-            return cmd
+            gif_cmd.extend(["-loop", "-1"])
+        
+        gif_cmd.append(output_file)
+        
+        # Add gifsicle optimization if requested
+        if use_gifsicle:
+            gifsicle_level = self.gifsicle_level_combo.currentText()
+            level_map = {"O1 (Fast)": "-O1", "O2": "-O2", "O3 (Best)": "-O3"}
+            gif_cmd.extend(["&&", "gifsicle", level_map[gifsicle_level], output_file, "-o", output_file])
+        
+        # Return both commands (we'll handle execution differently)
+        return palette_cmd + ["&&"] + gif_cmd
     
     def process_file(self):
         input_file = self.input_file_edit.text()
